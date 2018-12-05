@@ -90,6 +90,7 @@ fn setup_directory() {
 }
 
 fn exists(folder: String, name: String) -> bool {
+    // Check if file containing name exists
     for file in fs::read_dir(folder).unwrap() {
         let file = file.unwrap().path();
         let filename = match file.to_str() {
@@ -160,7 +161,7 @@ fn main() -> Result<(), reqwest::Error> {
 
     // Do rip
     let mut before = None;
-    let mut files: Vec<Vec<PathBuf>> = Vec::new();
+    let mut files: Vec<Vec<Option<PathBuf>>> = Vec::new();
 
     loop {
         let url = build_url(&c, false, before.clone());
@@ -172,30 +173,21 @@ fn main() -> Result<(), reqwest::Error> {
         let _links = res.response._links;
 
         for post in res.response.liked_posts {
-            let mut post_files: Vec<PathBuf> = Vec::new();
+            let mut post_files: Vec<Option<PathBuf>> = Vec::new();
 
             if post.kind == "photo" {
                 if let Some(photos) = post.photos {
                     for photo in photos {
-                        match download(&client, "pics", photo.original_size.url)? {
-                            Some(path) => post_files.push(path),
-                            _ => {},
-                        };
+                        post_files.push(download(&client, "pics", photo.original_size.url)?);
                     }
                 }
             } else if post.kind == "video" {
                 if let Some(url) = post.video_url {
-                    match download(&client, "videos", url)? {
-                        Some(path) => post_files.push(path),
-                        _ => {},
-                    };
+                    post_files.push(download(&client, "videos", url)?);
                 }
             }
 
-            if post_files.len() > 0 {
-                files.push(post_files);
-            }
-
+            files.push(post_files);
             bar.inc(1);
         }
 
@@ -209,17 +201,20 @@ fn main() -> Result<(), reqwest::Error> {
     // Rename files with index
     for (i, post) in files.iter().rev().enumerate() {
         for file in post {
-            let filename = &file.file_name()
-                .unwrap()
-                .to_str()
-                .unwrap();
+            if let Some(file) = file {
+                let filename = &file.file_name()
+                    .unwrap()
+                    .to_str()
+                    .unwrap();
 
-            let mut new_file = file.clone();
-            new_file.set_file_name(format!("{} - {}", i + 1, filename));
+                let mut new_file = file.clone();
+                new_file.set_file_name(format!("{} - {}", i + 1, filename));
 
-            fs::rename(&file, new_file).unwrap_or_else(|e| {
-                panic!("Could not rename file! Error: {}", e);
-            });
+                fs::rename(&file, new_file.clone()).unwrap_or_else(|e| {
+                    println!("{:?}, {:?}", &file, new_file.clone());
+                    panic!("Could not rename file! Error: {}", e);
+                });
+            }
         }
     }
 
