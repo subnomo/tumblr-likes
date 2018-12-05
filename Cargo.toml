@@ -2,6 +2,18 @@
 name = "tumblr-likes"
 version = "0.1.0"
 authors = ["Alex Taylor <alex@alext.xyz>"]
+description = "Downloads your liked photos and videos on Tumblr."
+categories = ["command-line-utilities"]
+keywords = [
+    "tumblr",
+    "downloader",
+    "download",
+    "photo",
+    "video",
+]
+homepage = "https://github.com/subnomo/tumblr-likes"
+repository = "https://github.com/subnomo/tumblr-likes"
+license = "MIT"
 
 [dependencies]
 indicatif = "0.10.2"
