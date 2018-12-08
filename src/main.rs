@@ -134,7 +134,8 @@ fn main() -> Result<(), reqwest::Error> {
         .send()?;
 
     if !info.status().is_success() {
-        println!("There was an error fetching your likes. Is there a mistake in credentials.toml?");
+        println!("There was an error fetching your likes. Please make sure \
+                  you provided the correct API key and blog name.");
         return Ok(());
     }
 
