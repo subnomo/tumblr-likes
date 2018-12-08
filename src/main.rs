@@ -133,8 +133,6 @@ fn main() -> Result<(), reqwest::Error> {
     let mut info = client.get(&info_url)
         .send()?;
 
-    println!("{:?}", info);
-
     if !info.status().is_success() {
         println!("There was an error fetching your likes. Is there a mistake in credentials.toml?");
         return Ok(());
