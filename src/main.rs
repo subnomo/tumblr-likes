@@ -18,12 +18,13 @@ use types::ReturnVal;
 
 
 #[derive(Debug)]
-struct Credentials {
+struct Arguments {
     api_key: String,
     blog_name: String,
+    verbose: bool,
 }
 
-fn build_url(cred: &Credentials, one: bool, before: Option<String>) -> String {
+fn build_url(cred: &Arguments, one: bool, before: Option<String>) -> String {
     let limit = if one {
         1
     } else {
@@ -92,7 +93,7 @@ fn download(client: &reqwest::Client, folder: &str, url: String) -> Result<Optio
     Ok(None)
 }
 
-fn cli() -> Credentials {
+fn cli() -> Arguments {
     let env_key = env::var("TUMBLR_API_KEY");
 
     let matches = App::new("tumblr-likes")
@@ -109,9 +110,14 @@ fn cli() -> Credentials {
             .help("The blog to download likes from")
             .takes_value(true)
             .required(true))
+        .arg(Arg::with_name("verbose")
+            .short("v")
+            .long("verbose")
+            .help("Prints extra information, used for debugging")
+        )
         .get_matches();
 
-    Credentials {
+    Arguments {
         api_key: match matches.value_of("api_key") {
             Some(a) => a.to_string(),
             None => env_key.unwrap().to_string(),
@@ -121,17 +127,28 @@ fn cli() -> Credentials {
             Some(b) => b.to_string(),
             None => "".to_string(),
         },
+
+        verbose: matches.is_present("verbose"),
     }
 }
 
 fn main() -> Result<(), reqwest::Error> {
-    let c = cli();
+    let args = cli();
 
     let client = reqwest::Client::new();
 
-    let info_url = build_url(&c, true, None);
+    let info_url = build_url(&args, true, None);
+
+    if args.verbose {
+        println!("Info URL: {}", info_url);
+    }
+
     let mut info = client.get(&info_url)
         .send()?;
+
+    if args.verbose {
+        println!("{:#?}", info);
+    }
 
     if !info.status().is_success() {
         println!("There was an error fetching your likes. Please make sure \
@@ -140,6 +157,11 @@ fn main() -> Result<(), reqwest::Error> {
     }
 
     let info: ReturnVal = info.json()?;
+
+    if args.verbose {
+        println!("Info: {:#?}", info);
+    }
+
     let bar = ProgressBar::new(info.response.liked_count as _);
 
     setup_directory();
@@ -148,8 +170,12 @@ fn main() -> Result<(), reqwest::Error> {
     let mut before = None;
     let mut files: Vec<Vec<Option<PathBuf>>> = Vec::new();
 
+    if args.verbose {
+        println!("Downloading likes...");
+    }
+
     loop {
-        let url = build_url(&c, false, before.clone());
+        let url = build_url(&args, false, before.clone());
 
         let res: ReturnVal = client.get(&url)
             .send()?
@@ -184,6 +210,11 @@ fn main() -> Result<(), reqwest::Error> {
     }
 
     // Rename files with index
+
+    if args.verbose {
+        println!("Renaming files...\n");
+    }
+
     for (i, post) in files.iter().rev().enumerate() {
         for file in post {
             if let Some(file) = file {
