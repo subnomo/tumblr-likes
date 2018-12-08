@@ -9,13 +9,12 @@ extern crate serde;
 
 mod types;
 
+use clap::{App, Arg};
+use indicatif::ProgressBar;
 use std::env;
 use std::fs::{self, File};
 use std::path::{Path, PathBuf};
-use clap::{App, Arg};
-use indicatif::ProgressBar;
 use types::ReturnVal;
-
 
 #[derive(Debug)]
 struct Arguments {
@@ -25,27 +24,22 @@ struct Arguments {
 }
 
 fn build_url(cred: &Arguments, one: bool, before: Option<String>) -> String {
-    let limit = if one {
-        1
-    } else {
-        20
-    };
+    let limit = if one { 1 } else { 20 };
 
     let before = match before {
         Some(b) => format!("&before={}", b),
         _ => "".to_string(),
     };
 
-    format!("https://api.tumblr.com/v2/blog/{}/likes?api_key={}&limit={}{}", cred.blog_name,
-        cred.api_key, limit, before)
+    format!(
+        "https://api.tumblr.com/v2/blog/{}/likes?api_key={}&limit={}{}",
+        cred.blog_name, cred.api_key, limit, before
+    )
 }
 
 fn setup_directory() {
-    fs::create_dir_all("downloads/pics")
-        .expect("Could not create download directory!");
-
-    fs::create_dir_all("downloads/videos")
-        .expect("Could not create download directory!");
+    fs::create_dir_all("downloads/pics").expect("Could not create download directory!");
+    fs::create_dir_all("downloads/videos").expect("Could not create download directory!");
 }
 
 fn exists(folder: String, name: String) -> bool {
@@ -65,7 +59,11 @@ fn exists(folder: String, name: String) -> bool {
     false
 }
 
-fn download(client: &reqwest::Client, folder: &str, url: String) -> Result<Option<PathBuf>, reqwest::Error> {
+fn download(
+    client: &reqwest::Client,
+    folder: &str,
+    url: String,
+) -> Result<Option<PathBuf>, reqwest::Error> {
     let split: Vec<&str> = url.split("/").collect();
     let filename = split.last().unwrap();
     let folder = format!("downloads/{}", folder);
@@ -77,15 +75,11 @@ fn download(client: &reqwest::Client, folder: &str, url: String) -> Result<Optio
         return Ok(None);
     }
 
-    let mut res = client.get(&url)
-        .send()?;
+    let mut res = client.get(&url).send()?;
 
     if res.status().is_success() {
-        let mut f = File::create(path)
-            .expect("Could not create file!");
-
-        std::io::copy(&mut res, &mut f)
-            .expect("Could not download file!");
+        let mut f = File::create(path).expect("Could not create file!");
+        std::io::copy(&mut res, &mut f).expect("Could not download file!");
 
         return Ok(Some(path.to_path_buf()));
     }
@@ -100,20 +94,25 @@ fn cli() -> Arguments {
         .version("0.1.0")
         .author("Alex Taylor <alex@alext.xyz>")
         .about("Downloads your liked photos and videos on Tumblr.")
-        .arg(Arg::with_name("api_key")
-            .short("a")
-            .help("Your Tumblr API key")
-            .takes_value(true)
-            .required(env_key.is_err()))
-        .arg(Arg::with_name("blog")
-            .short("b")
-            .help("The blog to download likes from")
-            .takes_value(true)
-            .required(true))
-        .arg(Arg::with_name("verbose")
-            .short("v")
-            .long("verbose")
-            .help("Prints extra information, used for debugging")
+        .arg(
+            Arg::with_name("api_key")
+                .short("a")
+                .help("Your Tumblr API key")
+                .takes_value(true)
+                .required(env_key.is_err()),
+        )
+        .arg(
+            Arg::with_name("blog")
+                .short("b")
+                .help("The blog to download likes from")
+                .takes_value(true)
+                .required(true),
+        )
+        .arg(
+            Arg::with_name("verbose")
+                .short("v")
+                .long("verbose")
+                .help("Prints extra information, used for debugging"),
         )
         .get_matches();
 
@@ -136,23 +135,23 @@ fn main() -> Result<(), reqwest::Error> {
     let args = cli();
 
     let client = reqwest::Client::new();
-
     let info_url = build_url(&args, true, None);
 
     if args.verbose {
         println!("Info URL: {}", info_url);
     }
 
-    let mut info = client.get(&info_url)
-        .send()?;
+    let mut info = client.get(&info_url).send()?;
 
     if args.verbose {
         println!("{:#?}", info);
     }
 
     if !info.status().is_success() {
-        println!("There was an error fetching your likes. Please make sure \
-                  you provided the correct API key and blog name.");
+        println!(
+            "There was an error fetching your likes. Please make sure \
+             you provided the correct API key and blog name."
+        );
         return Ok(());
     }
 
@@ -177,10 +176,7 @@ fn main() -> Result<(), reqwest::Error> {
     loop {
         let url = build_url(&args, false, before.clone());
 
-        let res: ReturnVal = client.get(&url)
-            .send()?
-            .json()?;
-
+        let res: ReturnVal = client.get(&url).send()?.json()?;
         let _links = res.response._links;
 
         for post in res.response.liked_posts {
@@ -218,10 +214,7 @@ fn main() -> Result<(), reqwest::Error> {
     for (i, post) in files.iter().rev().enumerate() {
         for file in post {
             if let Some(file) = file {
-                let filename = &file.file_name()
-                    .unwrap()
-                    .to_str()
-                    .unwrap();
+                let filename = &file.file_name().unwrap().to_str().unwrap();
 
                 let mut new_file = file.clone();
                 new_file.set_file_name(format!("{} - {}", i + 1, filename));
