@@ -2,67 +2,25 @@
 extern crate serde_derive;
 extern crate serde_json;
 
+extern crate clap;
 extern crate indicatif;
 extern crate reqwest;
 extern crate serde;
-extern crate toml;
 
 mod types;
 
+use std::env;
 use std::fs::{self, File};
-use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
-use toml::from_str;
+use clap::{App, Arg};
 use indicatif::ProgressBar;
 use types::ReturnVal;
 
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug)]
 struct Credentials {
     api_key: String,
     blog_name: String,
-}
-
-#[cfg(windows)]
-const LINE_ENDING: &'static str = "\r\n";
-#[cfg(not(windows))]
-const LINE_ENDING: &'static str = "\n";
-
-fn get_credentials() -> Result<Credentials, String> {
-    // Parse credentials.toml
-    let mut file = match File::open("credentials.toml") {
-        Ok(f) => f,
-        Err(_) => {
-            let mut f = File::create("credentials.toml")
-                .expect("Could not create credentials.toml!");
-
-            let contents = format!("api_key = \"\"{}blog_name = \"\"", LINE_ENDING);
-            f.write(contents.as_bytes()).expect("Could not write to credentials.toml!");
-
-            return Err("Please fill out \"credentials.toml\" with your Tumblr credentials.".to_string());
-        },
-    };
-
-    let mut file_text = String::new();
-
-    file.read_to_string(&mut file_text).unwrap_or_else(|e| {
-        panic!("Could not read credentials.toml! Error: {}", e);
-    });
-
-    let bad_cred = "Could not parse credentials.toml! Did you fill it out correctly?".to_string();
-
-    let cred: Credentials = match from_str(file_text.as_str()) {
-        Ok(c) => c,
-        Err(_) => {
-            return Err(bad_cred);
-        },
-    };
-
-    if cred.api_key == "" || cred.blog_name == "" {
-        return Err(bad_cred);
-    }
-
-    Ok(cred)
 }
 
 fn build_url(cred: &Credentials, one: bool, before: Option<String>) -> String {
@@ -134,20 +92,48 @@ fn download(client: &reqwest::Client, folder: &str, url: String) -> Result<Optio
     Ok(None)
 }
 
+fn cli() -> Credentials {
+    let env_key = env::var("TUMBLR_API_KEY");
+
+    let matches = App::new("tumblr-likes")
+        .version("0.1.0")
+        .author("Alex Taylor <alex@alext.xyz>")
+        .about("Downloads your liked photos and videos on Tumblr.")
+        .arg(Arg::with_name("api_key")
+            .short("a")
+            .help("Your Tumblr API key")
+            .takes_value(true)
+            .required(env_key.is_err()))
+        .arg(Arg::with_name("blog")
+            .short("b")
+            .help("The blog to download likes from")
+            .takes_value(true)
+            .required(true))
+        .get_matches();
+
+    Credentials {
+        api_key: match matches.value_of("api_key") {
+            Some(a) => a.to_string(),
+            None => env_key.unwrap().to_string(),
+        },
+
+        blog_name: match matches.value_of("blog") {
+            Some(b) => b.to_string(),
+            None => "".to_string(),
+        },
+    }
+}
+
 fn main() -> Result<(), reqwest::Error> {
-    let c = match get_credentials() {
-        Ok(cred) => cred,
-        Err(err) => {
-            println!("{}", err);
-            return Ok(());
-        }
-    };
+    let c = cli();
 
     let client = reqwest::Client::new();
 
     let info_url = build_url(&c, true, None);
     let mut info = client.get(&info_url)
         .send()?;
+
+    println!("{:?}", info);
 
     if !info.status().is_success() {
         println!("There was an error fetching your likes. Is there a mistake in credentials.toml?");
@@ -210,8 +196,7 @@ fn main() -> Result<(), reqwest::Error> {
                 let mut new_file = file.clone();
                 new_file.set_file_name(format!("{} - {}", i + 1, filename));
 
-                fs::rename(&file, new_file.clone()).unwrap_or_else(|e| {
-                    println!("{:?}, {:?}", &file, new_file.clone());
+                fs::rename(&file, new_file).unwrap_or_else(|e| {
                     panic!("Could not rename file! Error: {}", e);
                 });
             }
