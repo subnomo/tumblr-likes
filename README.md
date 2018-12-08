@@ -1,5 +1,5 @@
 # tumblr-likes
-![Crates.io](https://img.shields.io/crates/v/tumblr-likes.svg)
+[![Crates.io](https://img.shields.io/crates/v/tumblr-likes.svg)](https://crates.io/crates/tumblr-likes)
 
 ### A command-line program for downloading liked posts from Tumblr.
 
@@ -15,23 +15,23 @@ $ cargo install tumblr-likes
 
 ## Configuration
 
-On the first run, tumblr-likes will generate a `credentials.toml` file for you. In order to download liked posts, you will need an API key.
+In order to download liked posts, you will need an API key.
 
 1. [Register an application with the Tumblr API](https://www.tumblr.com/oauth/apps). The name and other options don't matter.
 2. Click "Expore API" under the application you just created
 3. Click "Allow"
 4. In the upper right, click "Show Keys"
-5. Copy the API key into the `credentials.toml` file that was created.
-
-The `credentials.toml` file also needs the username of the blog to download from.
+5. Copy the API key shown
 
 ## Usage
 
-On the command line, just type:
+On the command line:
 
 ```
-$ tumblr-likes
+$ tumblr-likes -a <api_key> -b <blog>
 ```
+
+If you don't want to provide the API key every time, you can save it into an environmental variable `$TUMBLR_API_KEY` instead.
 
 Liked posts will be downloaded into a `downloads` folder in the current directory.
 
