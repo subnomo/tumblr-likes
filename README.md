@@ -33,7 +33,7 @@ $ tumblr-likes -a <api_key> -b <blog>
 
 If you don't want to provide the API key every time, you can save it into an environmental variable `$TUMBLR_API_KEY` instead.
 
-Liked posts will be downloaded into a `downloads` folder in the current directory.
+By default, liked posts will be downloaded into a `downloads` folder in the current directory. You can use `-d` to set a custom output directory.
 
 ---
 

@@ -1165,7 +1165,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 
 [[package]]
 name = "tumblr-likes"
-version = "0.2.2"
+version = "0.2.3"
 dependencies = [
  "clap 2.32.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "indicatif 0.10.2 (registry+https://github.com/rust-lang/crates.io-index)",

@@ -1,6 +1,6 @@
 [package]
 name = "tumblr-likes"
-version = "0.2.2"
+version = "0.2.3"
 authors = ["Alex Taylor <alex@alext.xyz>"]
 description = "Downloads your liked photos and videos on Tumblr."
 readme = "README.md"
