@@ -12,15 +12,18 @@ mod types;
 use clap::{App, Arg};
 use indicatif::ProgressBar;
 use std::env;
+use std::error::Error;
 use std::fs::{self, File};
+use std::io::{copy, Write};
 use std::path::{Path, PathBuf};
-use types::ReturnVal;
+use types::*;
 
 #[derive(Debug)]
 struct Arguments {
     api_key: String,
     blog_name: String,
     directory: String,
+    dump: Option<String>,
     verbose: bool,
 }
 
@@ -84,7 +87,7 @@ fn download(
 
     if res.status().is_success() {
         let mut f = File::create(path).expect("Could not create file!");
-        std::io::copy(&mut res, &mut f).expect("Could not download file!");
+        copy(&mut res, &mut f).expect("Could not download file!");
 
         return Ok(Some(path.to_path_buf()));
     }
@@ -121,6 +124,12 @@ fn cli() -> Arguments {
                 .takes_value(true),
         )
         .arg(
+            Arg::with_name("JSON_DUMP")
+                .long("dump")
+                .help("Dumps liked posts into the given JSON file")
+                .takes_value(true),
+        )
+        .arg(
             Arg::with_name("verbose")
                 .short("v")
                 .long("verbose")
@@ -144,6 +153,7 @@ fn cli() -> Arguments {
             None => "downloads".to_string(),
         },
 
+        dump: matches.value_of("JSON_DUMP").map(|s| s.to_string()),
         verbose: matches.is_present("verbose"),
     }
 }
@@ -185,6 +195,7 @@ fn main() -> Result<(), reqwest::Error> {
     // Do rip
     let mut before = None;
     let mut files: Vec<Vec<Option<PathBuf>>> = Vec::new();
+    let mut all_posts: Vec<Post> = Vec::new();
 
     if args.verbose {
         println!("Downloading likes...");
@@ -193,26 +204,35 @@ fn main() -> Result<(), reqwest::Error> {
     loop {
         let url = build_url(&args, false, before.clone());
 
-        let res: ReturnVal = client.get(&url).send()?.json()?;
+        let mut res: ReturnVal = client.get(&url).send()?.json()?;
         let _links = res.response._links;
 
-        for post in res.response.liked_posts {
-            let mut post_files: Vec<Option<PathBuf>> = Vec::new();
+        if args.dump.is_none() {
+            for post in res.response.liked_posts {
+                let mut post_files: Vec<Option<PathBuf>> = Vec::new();
 
-            if post.kind == "photo" {
-                if let Some(photos) = post.photos {
-                    for photo in photos {
-                        post_files.push(download(&client, &args, "pics", photo.original_size.url)?);
+                if post.kind == "photo" {
+                    if let Some(photos) = post.photos {
+                        for photo in photos {
+                            post_files.push(download(
+                                &client,
+                                &args,
+                                "pics",
+                                photo.original_size.url,
+                            )?);
+                        }
+                    }
+                } else if post.kind == "video" {
+                    if let Some(url) = post.video_url {
+                        post_files.push(download(&client, &args, "videos", url)?);
                     }
                 }
-            } else if post.kind == "video" {
-                if let Some(url) = post.video_url {
-                    post_files.push(download(&client, &args, "videos", url)?);
-                }
-            }
 
-            files.push(post_files);
-            bar.inc(1);
+                files.push(post_files);
+                bar.inc(1);
+            }
+        } else {
+            all_posts.append(&mut res.response.liked_posts);
         }
 
         if let Some(links) = _links {
@@ -220,6 +240,26 @@ fn main() -> Result<(), reqwest::Error> {
         } else {
             break;
         }
+    }
+
+    // Dump
+    if let Some(dump_file) = args.dump {
+        let path = Path::new(&dump_file);
+        let display = path.display();
+
+        let mut file = match File::create(&path) {
+            Ok(f) => f,
+            Err(e) => panic!("Couldn't create file {}: {}", display, e.description()),
+        };
+
+        let json = serde_json::to_string(&all_posts).unwrap();
+
+        match file.write_all(json.as_bytes()) {
+            Ok(_) => println!("Dumped post data to {}.", display),
+            Err(e) => panic!("Couldn't write to {}: {}", display, e.description()),
+        }
+
+        return Ok(());
     }
 
     // Rename files with index
