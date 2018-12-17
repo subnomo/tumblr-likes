@@ -251,6 +251,11 @@ static HTML_TEMPLATE: &'static str = "<!DOCTYPE html>
         .container {
             max-width: 625px;
         }
+
+        .card {
+            margin-top: 10px;
+            margin-bottom: 10px;
+        }
     </style>
 </head>
 <body>
