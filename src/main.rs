@@ -36,7 +36,7 @@ fn cli() -> Arguments {
     let env_key = env::var("TUMBLR_API_KEY");
 
     let matches = App::new("tumblr-likes")
-        .version("0.2.3")
+        .version("0.3.0")
         .author("Alex Taylor <alex@alext.xyz>")
         .about("Downloads your liked photos and videos on Tumblr.")
         .arg(

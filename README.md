@@ -3,6 +3,8 @@
 
 ### A command-line program for downloading liked posts from Tumblr.
 
+![Example of exported HTML](https://i.imgur.com/okJC75i.png)
+
 ## Installation
 
 Download the [latest release for your platform](https://github.com/subnomo/tumblr-likes/releases).
@@ -29,6 +31,12 @@ On the command line:
 
 ```
 $ tumblr-likes -a <api_key> -b <blog>
+```
+
+**To export posts to html**:
+
+```
+$ tumblr-likes -a <api_key> -b <blog> --export likes.html
 ```
 
 If you don't want to provide the API key every time, you can save it into an environmental variable `$TUMBLR_API_KEY` instead.
