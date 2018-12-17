@@ -4,95 +4,32 @@ extern crate serde_json;
 
 extern crate clap;
 extern crate indicatif;
+extern crate regex;
 extern crate reqwest;
 extern crate serde;
 
 mod types;
+mod util;
 
 use clap::{App, Arg};
 use indicatif::ProgressBar;
+use regex::Regex;
 use std::env;
 use std::error::Error;
 use std::fs::{self, File};
-use std::io::{copy, Write};
+use std::io::Write;
 use std::path::{Path, PathBuf};
 use types::*;
+use util::*;
 
 #[derive(Debug)]
-struct Arguments {
+pub struct Arguments {
     api_key: String,
     blog_name: String,
     directory: String,
     dump: Option<String>,
+    export: Option<String>,
     verbose: bool,
-}
-
-fn build_url(args: &Arguments, one: bool, before: Option<String>) -> String {
-    let limit = if one { 1 } else { 20 };
-
-    let before = match before {
-        Some(b) => format!("&before={}", b),
-        _ => "".to_string(),
-    };
-
-    format!(
-        "https://api.tumblr.com/v2/blog/{}/likes?api_key={}&limit={}{}",
-        args.blog_name, args.api_key, limit, before
-    )
-}
-
-fn setup_directory(args: &Arguments) {
-    fs::create_dir_all(format!("{}/pics", args.directory))
-        .expect("Could not create download directory!");
-
-    fs::create_dir_all(format!("{}/videos", args.directory))
-        .expect("Could not create download directory!");
-}
-
-fn exists(folder: String, name: String) -> bool {
-    // Check if file containing name exists
-    for file in fs::read_dir(folder).unwrap() {
-        let file = file.unwrap().path();
-        let filename = match file.to_str() {
-            Some(s) => s.to_string(),
-            _ => continue,
-        };
-
-        if filename.contains(&name) {
-            return true;
-        }
-    }
-
-    false
-}
-
-fn download(
-    client: &reqwest::Client,
-    args: &Arguments,
-    folder: &str,
-    url: String,
-) -> Result<Option<PathBuf>, reqwest::Error> {
-    let split: Vec<&str> = url.split("/").collect();
-    let filename = split.last().unwrap();
-    let folder = format!("{}/{}", args.directory, folder);
-    let file = format!("{}/{}", folder, filename);
-    let path = Path::new(&file);
-
-    // Skip already downloaded files
-    if exists(folder, filename.to_string()) {
-        return Ok(None);
-    }
-
-    let mut res = client.get(&url).send()?;
-
-    if res.status().is_success() {
-        let mut f = File::create(path).expect("Could not create file!");
-        copy(&mut res, &mut f).expect("Could not download file!");
-
-        return Ok(Some(path.to_path_buf()));
-    }
-
-    Ok(None)
 }
 
 fn cli() -> Arguments {
@@ -130,6 +67,13 @@ fn cli() -> Arguments {
                 .takes_value(true),
         )
         .arg(
+            Arg::with_name("HTML_FILE")
+                .long("export")
+                .short("e")
+                .help("Exports liked posts into the given HTML file")
+                .takes_value(true),
+        )
+        .arg(
             Arg::with_name("verbose")
                 .short("v")
                 .long("verbose")
@@ -154,6 +98,7 @@ fn cli() -> Arguments {
         },
 
         dump: matches.value_of("JSON_DUMP").map(|s| s.to_string()),
+        export: matches.value_of("HTML_FILE").map(|s| s.to_string()),
         verbose: matches.is_present("verbose"),
     }
 }
@@ -207,7 +152,9 @@ fn main() -> Result<(), reqwest::Error> {
         let mut res: ReturnVal = client.get(&url).send()?.json()?;
         let _links = res.response._links;
 
-        if args.dump.is_none() {
+        if !args.dump.is_none() || !args.export.is_none() {
+            all_posts.append(&mut res.response.liked_posts);
+        } else {
             for post in res.response.liked_posts {
                 let mut post_files: Vec<Option<PathBuf>> = Vec::new();
 
@@ -231,8 +178,6 @@ fn main() -> Result<(), reqwest::Error> {
                 files.push(post_files);
                 bar.inc(1);
             }
-        } else {
-            all_posts.append(&mut res.response.liked_posts);
         }
 
         if let Some(links) = _links {
@@ -255,10 +200,16 @@ fn main() -> Result<(), reqwest::Error> {
         let json = serde_json::to_string(&all_posts).unwrap();
 
         match file.write_all(json.as_bytes()) {
-            Ok(_) => println!("Dumped post data to {}.", display),
+            Ok(_) => println!("Dumped liked post data to {}.", display),
             Err(e) => panic!("Couldn't write to {}: {}", display, e.description()),
         }
 
+        return Ok(());
+    }
+
+    // Export
+    if let Some(export_file) = args.export {
+        export(&client, all_posts, export_file);
         return Ok(());
     }
 
@@ -286,4 +237,191 @@ fn main() -> Result<(), reqwest::Error> {
     bar.finish();
 
     Ok(())
+}
+
+static HTML_TEMPLATE: &'static str = "<!DOCTYPE html>
+<html lang='en'>
+<head>
+    <meta charset='UTF-8'>
+    <meta name='viewport' content='width=device-width, initial-scale=1'>
+    <title>Tumblr Likes</title>
+    <link rel='stylesheet' href='https://cdnjs.cloudflare.com/ajax/libs/bulma/0.7.2/css/bulma.min.css'>
+    <script defer src='https://use.fontawesome.com/releases/v5.6.1/js/all.js'></script>
+    <style>
+        .container {
+            max-width: 625px;
+        }
+    </style>
+</head>
+<body>
+    <div class='container'>
+        {{cards}}
+    </div>
+</body>
+</html>
+";
+
+static CARD_TEMPLATE: &'static str = "<div class='card'>
+    <div class='card-header'>
+        <div class='card-header-title'>
+            {{title}}
+        </div>
+    </div>
+
+    <div class='card-content'>
+        <div class='content'>
+            {{body}}
+        </div>
+    </div>
+</div>
+";
+
+fn export(client: &reqwest::Client, posts: Vec<Post>, file: String) {
+    // Create export directory
+    fs::create_dir_all("export").expect("Could not create export directory!");
+
+    println!("Exporting your liked posts...");
+
+    let mut posts_html = String::new();
+
+    for post in posts {
+        let title = format!("<a href='{}'>{}</a>", post.post_url, post.blog_name);
+        let mut card = CARD_TEMPLATE.replace("{{title}}", &title);
+
+        if post.kind == "text" {
+            if let Some(body) = post.body {
+                let mut content = body.clone();
+
+                // Extract URLs from body
+                let re = Regex::new(r#"src="([^"]+)"#).unwrap();
+                let caps = re.captures_iter(&body);
+
+                // Replace all objects with locally stored ones
+                for cap in caps {
+                    let url = cap.get(1).unwrap().as_str().to_string();
+                    let split: Vec<&str> = url.split("/").collect();
+                    let filename = split.last().unwrap();
+
+                    let dl = download_url(&client, url.clone(), format!("export/{}", filename));
+
+                    content = content.replace(&url, &match dl {
+                        Ok(p) => match p {
+                            Some(path) => {
+                                let src = path.to_str().unwrap();
+                                src.to_string()
+                            },
+
+                            None => "Could not fetch object".to_string(),
+                        },
+
+                        _ => "Could not fetch object".to_string(),
+                    });
+                }
+
+                card = card.replace("{{body}}", &content);
+                posts_html = format!("{}{}", posts_html, card);
+            }
+        } else if post.kind == "video" {
+            let mut body = String::new();
+
+            if let Some(trail) = post.trail {
+                let mut trail_content = render_trail(trail);
+
+                // Inject video
+                if let Some(url) = post.video_url {
+                    let split: Vec<&str> = url.split("/").collect();
+                    let filename = split.last().unwrap();
+
+                    let dl = download_url(&client, url.clone(), format!("export/{}", filename));
+
+                    trail_content = trail_content.replace(
+                        "{{content}}",
+                        &match dl {
+                            Ok(p) => match p {
+                                Some(path) => {
+                                    let src = path.to_str().unwrap();
+                                    let video = format!(
+                                        "<p><figure><video controls='controls' autoplay='autoplay' \
+                                         muted='muted'><source src='{}'></source></video></figure></p>",
+                                        src
+                                    );
+
+                                    video
+                                },
+
+                                None => "Could not fetch video".to_string(),
+                            },
+
+                            _ => "Could not fetch video".to_string(),
+                        }
+                    );
+                }
+
+                trail_content = trail_content.replace("{{content}}", "");
+                body = trail_content;
+            }
+
+            card = card.replace("{{body}}", &body);
+            posts_html = format!("{}{}", posts_html, card);
+        } else if post.kind == "photo" {
+            let mut body = String::new();
+
+            if let Some(trail) = post.trail {
+                let mut trail_content = render_trail(trail);
+
+                // Inject photos
+                if let Some(photos) = post.photos {
+                    for photo in photos {
+                        let url = photo.original_size.url;
+                        let split: Vec<&str> = url.split("/").collect();
+                        let filename = split.last().unwrap();
+                        let dl = download_url(&client, url.clone(), format!("export/{}", filename));
+
+                        trail_content = trail_content.replace(
+                            "{{content}}",
+                            &match dl {
+                                Ok(p) => match p {
+                                    Some(path) => {
+                                        let src = path.to_str().unwrap();
+                                        let img = format!(
+                                            "<figure><img src='{}' /></figure>{{{{content}}}}",
+                                            src
+                                        );
+
+                                        img
+                                    }
+
+                                    None => "Could not fetch photo".to_string(),
+                                },
+
+                                _ => "Could not fetch photo".to_string(),
+                            },
+                        );
+                    }
+                }
+
+                trail_content = trail_content.replace("{{content}}", "");
+                body = trail_content;
+            }
+
+            card = card.replace("{{body}}", &body);
+            posts_html = format!("{}{}", posts_html, card);
+        }
+    }
+
+    // Write to html file
+    let out = HTML_TEMPLATE.replace("{{cards}}", &posts_html);
+
+    let path = Path::new(&file);
+    let display = path.display();
+
+    let mut file = match File::create(&path) {
+        Ok(f) => f,
+        Err(e) => panic!("Couldn't create file {}: {}", display, e.description()),
+    };
+
+    match file.write_all(out.as_bytes()) {
+        Ok(_) => println!("Exported liked posts to {}.", display),
+        Err(e) => panic!("Couldn't write to {}: {}", display, e.description()),
+    }
 }

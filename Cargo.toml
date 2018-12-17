@@ -19,6 +19,7 @@ license = "MIT"
 [dependencies]
 clap = "2.32.0"
 indicatif = "0.10.2"
+regex = "1.1.0"
 reqwest = "0.9.5"
 serde = "1.0.80"
 serde_derive = "1.0.80"
