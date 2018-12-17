@@ -349,7 +349,7 @@ fn export(client: &reqwest::Client, posts: Vec<Post>, file: String) {
                                     let src = path.to_str().unwrap();
                                     let video = format!(
                                         "<p><figure><video controls='controls' autoplay='autoplay' \
-                                         muted='muted'><source src='{}'></source></video></figure></p>",
+                                         muted='muted'><source src='{}'></video></figure></p>",
                                         src
                                     );
 
