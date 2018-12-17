@@ -354,13 +354,13 @@ fn export(client: &reqwest::Client, posts: Vec<Post>, file: String) {
                                     );
 
                                     video
-                                },
+                                }
 
                                 None => "Could not fetch video".to_string(),
                             },
 
                             _ => "Could not fetch video".to_string(),
-                        }
+                        },
                     );
                 }
 

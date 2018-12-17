@@ -48,10 +48,16 @@ pub fn download_url(
     url: String,
     file: String,
 ) -> Result<Option<PathBuf>, reqwest::Error> {
+    let path = Path::new(&file);
+
+    // Skip existing files
+    if path.exists() {
+        return Ok(Some(path.to_path_buf()));
+    }
+
     let mut res = client.get(&url).send()?;
 
     if res.status().is_success() {
-        let path = Path::new(&file);
         let mut f = File::create(path).expect("Could not create file!");
         std::io::copy(&mut res, &mut f).expect("Could not download file!");
 
