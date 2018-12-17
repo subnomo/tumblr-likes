@@ -309,18 +309,21 @@ fn export(client: &reqwest::Client, posts: Vec<Post>, file: String) {
 
                     let dl = download_url(&client, url.clone(), format!("export/{}", filename));
 
-                    content = content.replace(&url, &match dl {
-                        Ok(p) => match p {
-                            Some(path) => {
-                                let src = path.to_str().unwrap();
-                                src.to_string()
+                    content = content.replace(
+                        &url,
+                        &match dl {
+                            Ok(p) => match p {
+                                Some(path) => {
+                                    let src = path.to_str().unwrap();
+                                    src.to_string()
+                                }
+
+                                None => "Could not fetch object".to_string(),
                             },
 
-                            None => "Could not fetch object".to_string(),
+                            _ => "Could not fetch object".to_string(),
                         },
-
-                        _ => "Could not fetch object".to_string(),
-                    });
+                    );
                 }
 
                 card = card.replace("{{body}}", &content);
