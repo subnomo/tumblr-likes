@@ -252,8 +252,8 @@ static HTML_TEMPLATE: &'static str = "<!DOCTYPE html>
         }
 
         .card {
-            margin-top: 10px;
-            margin-bottom: 10px;
+            margin-top: 20px;
+            margin-bottom: 20px;
         }
     </style>
 </head>
