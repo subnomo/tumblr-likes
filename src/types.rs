@@ -39,6 +39,7 @@ pub struct Post {
     pub timestamp: u64,
     pub date: String,
     pub format: String,
+    pub note_count: u64,
     pub reblog_key: String,
     pub tags: Vec<String>,
     pub body: Option<String>,

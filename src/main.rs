@@ -276,6 +276,13 @@ static CARD_TEMPLATE: &'static str = "<div class='card'>
         <div class='content'>
             {{body}}
         </div>
+        <div class='tags'>
+            {{tags}}
+        </div>
+        <div class='tags'>
+            <span class='tag'>{{date}}</span>
+            <span class='tag'>{{note_count}} notes</span>
+        </div>
     </div>
 </div>
 ";
@@ -291,6 +298,16 @@ fn export(client: &reqwest::Client, posts: Vec<Post>, file: String) {
     for post in posts {
         let title = format!("<a href='{}'>{}</a>", post.post_url, post.blog_name);
         let mut card = CARD_TEMPLATE.replace("{{title}}", &title);
+
+        if post.tags.len() > 0 {
+            let tags = format!("<span class='tag'>{}</span>", post.tags.join("</span><span class='tag'>"));
+            card = card.replace("{{tags}}", &tags);
+        } else {
+            card = card.replace("{{tags}}", "");
+        }
+
+        card = card.replace("{{date}}", &post.date);
+        card = card.replace("{{note_count}}", &post.note_count.to_string());
 
         if post.kind == "text" {
             if let Some(body) = post.body {
