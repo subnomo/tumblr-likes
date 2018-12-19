@@ -1,8 +1,8 @@
 use std::fs::{self, File};
 use std::path::{Path, PathBuf};
 
-use types::TrailItem;
-use Arguments;
+use crate::types::TrailItem;
+use crate::Arguments;
 
 pub fn build_url(args: &Arguments, one: bool, before: Option<String>) -> String {
     let limit = if one { 1 } else { 20 };

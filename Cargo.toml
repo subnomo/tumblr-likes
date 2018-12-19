@@ -15,6 +15,7 @@ keywords = [
 homepage = "https://github.com/subnomo/tumblr-likes"
 repository = "https://github.com/subnomo/tumblr-likes"
 license = "MIT"
+edition = "2018"
 
 [dependencies]
 clap = "2.32.0"

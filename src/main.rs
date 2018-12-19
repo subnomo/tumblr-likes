@@ -1,16 +1,3 @@
-#[macro_use]
-extern crate serde_derive;
-extern crate serde_json;
-
-extern crate clap;
-extern crate indicatif;
-extern crate regex;
-extern crate reqwest;
-extern crate serde;
-
-mod types;
-mod util;
-
 use clap::{App, Arg};
 use indicatif::ProgressBar;
 use regex::Regex;
@@ -19,8 +6,12 @@ use std::error::Error;
 use std::fs::{self, File};
 use std::io::Write;
 use std::path::{Path, PathBuf};
-use types::*;
-use util::*;
+
+mod types;
+mod util;
+
+use crate::types::*;
+use crate::util::*;
 
 #[derive(Debug)]
 pub struct Arguments {
