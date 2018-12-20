@@ -144,9 +144,10 @@ fn main() -> Result<(), reqwest::Error> {
         let url = build_url(&args, false, before.clone());
 
         let mut res: ReturnVal = client.get(&url).send()?.json()?;
-        let _links = res.response._links;
+        let links = res.response._links;
 
         if !args.dump.is_none() || !args.export.is_none() {
+            // If dumping or exporting, we need to collect every post
             all_posts.append(&mut res.response.liked_posts);
         } else {
             for post in res.response.liked_posts {
@@ -174,8 +175,8 @@ fn main() -> Result<(), reqwest::Error> {
             }
         }
 
-        if let Some(links) = _links {
-            before = Some(links.next.query_params.before);
+        if let Some(l) = links {
+            before = Some(l.next.query_params.before);
         } else {
             break;
         }
@@ -183,21 +184,7 @@ fn main() -> Result<(), reqwest::Error> {
 
     // Dump
     if let Some(dump_file) = args.dump {
-        let path = Path::new(&dump_file);
-        let display = path.display();
-
-        let mut file = match File::create(&path) {
-            Ok(f) => f,
-            Err(e) => panic!("Couldn't create file {}: {}", display, e.description()),
-        };
-
-        let json = serde_json::to_string(&all_posts).unwrap();
-
-        match file.write_all(json.as_bytes()) {
-            Ok(_) => println!("Dumped liked post data to {}.", display),
-            Err(e) => panic!("Couldn't write to {}: {}", display, e.description()),
-        }
-
+        dump(all_posts, dump_file);
         return Ok(());
     }
 
@@ -213,6 +200,13 @@ fn main() -> Result<(), reqwest::Error> {
         println!("Renaming files...\n");
     }
 
+    rename(files);
+
+    bar.finish();
+    Ok(())
+}
+
+fn rename(files: Vec<Vec<Option<PathBuf>>>) {
     for (i, post) in files.iter().rev().enumerate() {
         for file in post {
             if let Some(file) = file {
@@ -227,10 +221,23 @@ fn main() -> Result<(), reqwest::Error> {
             }
         }
     }
+}
 
-    bar.finish();
+fn dump(posts: Vec<Post>, file: String) {
+    let path = Path::new(&file);
+    let display = path.display();
 
-    Ok(())
+    let mut file = match File::create(&path) {
+        Ok(f) => f,
+        Err(e) => panic!("Couldn't create file {}: {}", display, e.description()),
+    };
+
+    let json = serde_json::to_string(&posts).unwrap();
+
+    match file.write_all(json.as_bytes()) {
+        Ok(_) => println!("Dumped liked post data to {}.", display),
+        Err(e) => panic!("Couldn't write to {}: {}", display, e.description()),
+    }
 }
 
 static HTML_TEMPLATE: &'static str = "<!DOCTYPE html>
