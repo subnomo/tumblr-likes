@@ -126,7 +126,10 @@ fn main() -> Result<(), reqwest::Error> {
 
     let bar = ProgressBar::new(info.response.liked_count as _);
 
-    setup_directory(&args);
+    // Setup directory if not in export mode
+    if args.export.is_none() {
+        setup_directory(&args);
+    }
 
     // Do rip
     let mut before = None;
