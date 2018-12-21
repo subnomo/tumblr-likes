@@ -3,7 +3,7 @@
 
 ### A command-line program for downloading liked posts from Tumblr.
 
-![Example of exported HTML](https://i.imgur.com/okJC75i.png)
+![Example of exported HTML](https://i.imgur.com/8WAxBit.png)
 
 ## Installation
 
