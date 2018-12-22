@@ -17,7 +17,7 @@ $ cargo install tumblr-likes
 
 ## Configuration
 
-In order to download liked posts, you will need an API key.
+In order to download liked posts, you will need an API key. Your blog must be configured to share likes publicly, this can be done by going to your blog's "edit appearance" menu.
 
 1. [Register an application with the Tumblr API](https://www.tumblr.com/oauth/apps). The name and other options don't matter.
 2. Click "Expore API" under the application you just created
