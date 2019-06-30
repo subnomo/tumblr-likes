@@ -42,7 +42,3 @@ $ tumblr-likes -a <api_key> -b <blog> --export likes.html
 If you don't want to provide the API key every time, you can save it into an environmental variable `$TUMBLR_API_KEY` instead.
 
 By default, liked posts will be downloaded into a `downloads` folder in the current directory. You can use `-d` to set a custom output directory.
-
----
-
-This is very similar to a [Node.js package I created](https://github.com/subnomo/tumblr-like-dl) a few years ago. I noticed it was getting an surge of installs recently, most likely because [Tumblr decided to ban adult content](https://www.theverge.com/2018/12/3/18123752/tumblr-adult-content-porn-ban-date-explicit-changes-why-safe-mode). That package doesn't work anymore though, so I rewrote it in Rust. If you were trying to use that package, sorry.
