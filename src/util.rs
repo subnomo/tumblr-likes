@@ -43,11 +43,9 @@ pub fn exists(folder: String, name: String) -> bool {
     false
 }
 
-pub fn download_url(
-    client: &reqwest::Client,
-    url: String,
-    file: String,
-) -> Result<Option<PathBuf>, reqwest::Error> {
+type DownloadResult = Result<Option<PathBuf>, reqwest::Error>;
+
+pub fn download_url(client: &reqwest::Client, url: String, file: String) -> DownloadResult {
     let path = Path::new(&file);
 
     // Skip existing files
@@ -106,4 +104,19 @@ pub fn render_trail(trail: Vec<TrailItem>) -> String {
     }
 
     trail_content
+}
+
+pub fn inject_content<F: Fn(PathBuf) -> String>(
+    raw: DownloadResult,
+    error_text: &str,
+    cb: F,
+) -> String {
+    return match raw {
+        Ok(p) => match p {
+            Some(path) => cb(path),
+            None => error_text.to_string(),
+        },
+
+        _ => error_text.to_string(),
+    };
 }

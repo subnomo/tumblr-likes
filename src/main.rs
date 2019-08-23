@@ -329,18 +329,10 @@ fn export(client: &reqwest::Client, posts: Vec<Post>, file: String) {
 
                     content = content.replace(
                         &url,
-                        &match dl {
-                            Ok(p) => match p {
-                                Some(path) => {
-                                    let src = path.to_str().unwrap();
-                                    src.to_string()
-                                }
-
-                                None => "Could not fetch object".to_string(),
-                            },
-
-                            _ => "Could not fetch object".to_string(),
-                        },
+                        &inject_content(dl, "Could not fetch object", |path| {
+                            let src = path.to_str().unwrap();
+                            src.to_string()
+                        }),
                     );
                 }
 
@@ -362,24 +354,16 @@ fn export(client: &reqwest::Client, posts: Vec<Post>, file: String) {
 
                     trail_content = trail_content.replace(
                         "{{content}}",
-                        &match dl {
-                            Ok(p) => match p {
-                                Some(path) => {
-                                    let src = path.to_str().unwrap();
-                                    let video = format!(
-                                        "<p><figure><video controls='controls' autoplay='autoplay' \
-                                         muted='muted'><source src='{}'></video></figure></p>",
-                                        src
-                                    );
+                        &inject_content(dl, "Could not fetch video", |path| {
+                            let src = path.to_str().unwrap();
+                            let video = format!(
+                                "<p><figure><video controls='controls' autoplay='autoplay' \
+                                 muted='muted'><source src='{}'></video></figure></p>",
+                                src
+                            );
 
-                                    video
-                                }
-
-                                None => "Could not fetch video".to_string(),
-                            },
-
-                            _ => "Could not fetch video".to_string(),
-                        },
+                            video
+                        }),
                     );
                 }
 
@@ -405,23 +389,15 @@ fn export(client: &reqwest::Client, posts: Vec<Post>, file: String) {
 
                         trail_content = trail_content.replace(
                             "{{content}}",
-                            &match dl {
-                                Ok(p) => match p {
-                                    Some(path) => {
-                                        let src = path.to_str().unwrap();
-                                        let img = format!(
-                                            "<figure><img src='{}' /></figure>{{{{content}}}}",
-                                            src
-                                        );
+                            &inject_content(dl, "Could not fetch photo", |path| {
+                                let src = path.to_str().unwrap();
+                                let img = format!(
+                                    "<figure><img src='{}' /></figure>{{{{content}}}}",
+                                    src
+                                );
 
-                                        img
-                                    }
-
-                                    None => "Could not fetch photo".to_string(),
-                                },
-
-                                _ => "Could not fetch photo".to_string(),
-                            },
+                                img
+                            }),
                         );
                     }
                 }
