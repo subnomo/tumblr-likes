@@ -107,11 +107,13 @@ fn cli() -> Arguments {
 fn main() -> Result<(), Box<dyn Error>> {
     let args = cli();
     let client = reqwest::Client::new();
+    let bar;
     let mut all_posts: Vec<Post> = Vec::new();
     let mut files: Vec<Vec<Option<PathBuf>>> = Vec::new();
 
     if !args.restore.is_none() {
         all_posts = restore_dump(args.restore.unwrap())?;
+        bar = ProgressBar::new(all_posts.len() as _);
     } else {
         let info_url = build_url(&args, true, None);
 
@@ -139,7 +141,7 @@ fn main() -> Result<(), Box<dyn Error>> {
             println!("Info: {:#?}", info);
         }
 
-        let bar = ProgressBar::new(info.response.liked_count as _);
+        bar = ProgressBar::new(info.response.liked_count as _);
 
         // Setup directory if not in export mode
         if args.export.is_none() {
@@ -194,8 +196,6 @@ fn main() -> Result<(), Box<dyn Error>> {
                 break;
             }
         }
-
-        bar.finish();
     }
 
     // Dump
@@ -206,7 +206,8 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     // Export
     if let Some(export_file) = args.export {
-        export(&client, all_posts, export_file);
+        export(&client, all_posts, export_file, &bar, args.verbose);
+        bar.finish();
         return Ok(());
     }
 
@@ -217,6 +218,8 @@ fn main() -> Result<(), Box<dyn Error>> {
     }
 
     rename(files);
+    bar.finish();
+
     Ok(())
 }
 
@@ -309,11 +312,13 @@ static CARD_TEMPLATE: &'static str = "<div class='card'>
 </div>
 ";
 
-fn export(client: &reqwest::Client, posts: Vec<Post>, file: String) {
+fn export(client: &reqwest::Client, posts: Vec<Post>, file: String, bar: &ProgressBar, verbose: bool) {
     // Create export directory
     fs::create_dir_all("export").expect("Could not create export directory!");
 
-    println!("Exporting your liked posts...");
+    if verbose {
+        println!("Exporting your liked posts...");
+    }
 
     let mut posts_html = String::new();
 
@@ -432,6 +437,8 @@ fn export(client: &reqwest::Client, posts: Vec<Post>, file: String) {
             card = card.replace("{{body}}", &body);
             posts_html = format!("{}{}", posts_html, card);
         }
+
+        bar.inc(1);
     }
 
     // Write to html file
@@ -446,7 +453,7 @@ fn export(client: &reqwest::Client, posts: Vec<Post>, file: String) {
     };
 
     match file.write_all(out.as_bytes()) {
-        Ok(_) => println!("Exported liked posts to {}.", display),
+        Ok(_) => if verbose { println!("Exported liked posts to {}.", display) },
         Err(e) => panic!("Couldn't write to {}: {}", display, e.description()),
     }
 }
