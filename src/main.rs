@@ -4,7 +4,7 @@ use regex::Regex;
 use std::env;
 use std::error::Error;
 use std::fs::{self, File};
-use std::io::Write;
+use std::io::{BufReader, Write};
 use std::path::{Path, PathBuf};
 
 mod types;
@@ -19,6 +19,7 @@ pub struct Arguments {
     blog_name: String,
     directory: String,
     dump: Option<String>,
+    restore: Option<String>,
     export: Option<String>,
     verbose: bool,
 }
@@ -35,14 +36,16 @@ fn cli() -> Arguments {
                 .short("a")
                 .help("Your Tumblr API key")
                 .takes_value(true)
-                .required(env_key.is_err()),
+                .required(env_key.is_err())
+                .conflicts_with("JSON_RESTORE"),
         )
         .arg(
             Arg::with_name("BLOG_NAME")
                 .short("b")
                 .help("The blog to download likes from")
                 .takes_value(true)
-                .required(true),
+                .required(true)
+                .conflicts_with("JSON_RESTORE"),
         )
         .arg(
             Arg::with_name("OUTPUT_DIR")
@@ -55,6 +58,12 @@ fn cli() -> Arguments {
             Arg::with_name("JSON_DUMP")
                 .long("dump")
                 .help("Dumps liked posts into the given JSON file")
+                .takes_value(true),
+        )
+        .arg(
+            Arg::with_name("JSON_RESTORE")
+                .long("restore")
+                .help("Restores liked posts from given JSON file")
                 .takes_value(true),
         )
         .arg(
@@ -75,7 +84,7 @@ fn cli() -> Arguments {
     Arguments {
         api_key: match matches.value_of("API_KEY") {
             Some(a) => a.to_string(),
-            None => env_key.unwrap().to_string(),
+            None => if !env_key.is_err() { env_key.unwrap().to_string() } else { "".to_string() },
         },
 
         blog_name: match matches.value_of("BLOG_NAME") {
@@ -89,97 +98,104 @@ fn cli() -> Arguments {
         },
 
         dump: matches.value_of("JSON_DUMP").map(|s| s.to_string()),
+        restore: matches.value_of("JSON_RESTORE").map(|s| s.to_string()),
         export: matches.value_of("HTML_FILE").map(|s| s.to_string()),
         verbose: matches.is_present("verbose"),
     }
 }
 
-fn main() -> Result<(), reqwest::Error> {
+fn main() -> Result<(), Box<dyn Error>> {
     let args = cli();
-
     let client = reqwest::Client::new();
-    let info_url = build_url(&args, true, None);
-
-    if args.verbose {
-        println!("Info URL: {}", info_url);
-    }
-
-    let mut info = client.get(&info_url).send()?;
-
-    if args.verbose {
-        println!("{:#?}", info);
-    }
-
-    if !info.status().is_success() {
-        println!(
-            "There was an error fetching your likes. Please make sure \
-             you provided the correct API key and blog name."
-        );
-        return Ok(());
-    }
-
-    let info: ReturnVal = info.json()?;
-
-    if args.verbose {
-        println!("Info: {:#?}", info);
-    }
-
-    let bar = ProgressBar::new(info.response.liked_count as _);
-
-    // Setup directory if not in export mode
-    if args.export.is_none() {
-        setup_directory(&args);
-    }
-
-    // Do rip
-    let mut before = None;
-    let mut files: Vec<Vec<Option<PathBuf>>> = Vec::new();
     let mut all_posts: Vec<Post> = Vec::new();
+    let mut files: Vec<Vec<Option<PathBuf>>> = Vec::new();
 
-    if args.verbose {
-        println!("Downloading likes...");
-    }
+    if !args.restore.is_none() {
+        all_posts = restore_dump(args.restore.unwrap())?;
+    } else {
+        let info_url = build_url(&args, true, None);
 
-    loop {
-        let url = build_url(&args, false, before.clone());
+        if args.verbose {
+            println!("Info URL: {}", info_url);
+        }
 
-        let mut res: ReturnVal = client.get(&url).send()?.json()?;
-        let links = res.response._links;
+        let mut info = client.get(&info_url).send()?;
 
-        if !args.dump.is_none() || !args.export.is_none() {
-            // If dumping or exporting, we need to collect every post
-            all_posts.append(&mut res.response.liked_posts);
-        } else {
-            for post in res.response.liked_posts {
-                let mut post_files: Vec<Option<PathBuf>> = Vec::new();
+        if args.verbose {
+            println!("{:#?}", info);
+        }
 
-                if post.kind == "photo" {
-                    if let Some(photos) = post.photos {
-                        for photo in photos {
-                            post_files.push(download(
-                                &client,
-                                &args,
-                                "pics",
-                                photo.original_size.url,
-                            )?);
+        if !info.status().is_success() {
+            println!(
+                "There was an error fetching your likes. Please make sure \
+                you provided the correct API key and blog name."
+            );
+            return Ok(());
+        }
+
+        let info: ReturnVal = info.json()?;
+
+        if args.verbose {
+            println!("Info: {:#?}", info);
+        }
+
+        let bar = ProgressBar::new(info.response.liked_count as _);
+
+        // Setup directory if not in export mode
+        if args.export.is_none() {
+            setup_directory(&args);
+        }
+
+        // Do rip
+        let mut before = None;
+
+        if args.verbose {
+            println!("Downloading likes...");
+        }
+
+        loop {
+            let url = build_url(&args, false, before.clone());
+
+            let mut res: ReturnVal = client.get(&url).send()?.json()?;
+            let links = res.response._links;
+
+            if !args.dump.is_none() || !args.export.is_none() {
+                // If dumping or exporting, we need to collect every post
+                all_posts.append(&mut res.response.liked_posts);
+            } else {
+                for post in res.response.liked_posts {
+                    let mut post_files: Vec<Option<PathBuf>> = Vec::new();
+
+                    if post.kind == "photo" {
+                        if let Some(photos) = post.photos {
+                            for photo in photos {
+                                post_files.push(download(
+                                    &client,
+                                    &args,
+                                    "pics",
+                                    photo.original_size.url,
+                                )?);
+                            }
+                        }
+                    } else if post.kind == "video" {
+                        if let Some(url) = post.video_url {
+                            post_files.push(download(&client, &args, "videos", url)?);
                         }
                     }
-                } else if post.kind == "video" {
-                    if let Some(url) = post.video_url {
-                        post_files.push(download(&client, &args, "videos", url)?);
-                    }
-                }
 
-                files.push(post_files);
-                bar.inc(1);
+                    files.push(post_files);
+                    bar.inc(1);
+                }
+            }
+
+            if let Some(l) = links {
+                before = Some(l.next.query_params.before);
+            } else {
+                break;
             }
         }
 
-        if let Some(l) = links {
-            before = Some(l.next.query_params.before);
-        } else {
-            break;
-        }
+        bar.finish();
     }
 
     // Dump
@@ -201,8 +217,6 @@ fn main() -> Result<(), reqwest::Error> {
     }
 
     rename(files);
-
-    bar.finish();
     Ok(())
 }
 
@@ -238,6 +252,15 @@ fn dump(posts: Vec<Post>, file: String) {
         Ok(_) => println!("Dumped liked post data to {}.", display),
         Err(e) => panic!("Couldn't write to {}: {}", display, e.description()),
     }
+}
+
+fn restore_dump(file: String) -> Result<Vec<Post>, Box<dyn Error>> {
+    let path = Path::new(&file);
+    let file = File::open(path)?;
+    let reader = BufReader::new(file);
+
+    let res: Vec<Post> = serde_json::from_reader(reader)?;
+    Ok(res)
 }
 
 static HTML_TEMPLATE: &'static str = "<!DOCTYPE html>
