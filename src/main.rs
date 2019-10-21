@@ -58,7 +58,8 @@ fn cli() -> Arguments {
             Arg::with_name("JSON_DUMP")
                 .long("dump")
                 .help("Dumps liked posts into the given JSON file")
-                .takes_value(true),
+                .takes_value(true)
+                .conflicts_with("JSON_RESTORE"),
         )
         .arg(
             Arg::with_name("JSON_RESTORE")
@@ -112,8 +113,23 @@ fn main() -> Result<(), Box<dyn Error>> {
     let mut files: Vec<Vec<Option<PathBuf>>> = Vec::new();
 
     if !args.restore.is_none() {
-        all_posts = restore_dump(args.restore.unwrap())?;
-        bar = ProgressBar::new(all_posts.len() as _);
+        if args.verbose {
+            println!("Restoring dump...");
+        }
+
+        let posts = restore_dump(args.restore.clone().unwrap())?;
+        bar = ProgressBar::new(posts.len() as _);
+
+        // If not exporting, just do a download
+        if args.export.is_none() {
+            if args.verbose {
+                println!("Downloading posts...");
+            }
+            
+            files = download_posts(posts, &client, &args, &bar)?;
+        } else {
+            all_posts = posts;
+        }
     } else {
         let info_url = build_url(&args, true, None);
 
@@ -165,29 +181,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                 // If dumping or exporting, we need to collect every post
                 all_posts.append(&mut res.response.liked_posts);
             } else {
-                for post in res.response.liked_posts {
-                    let mut post_files: Vec<Option<PathBuf>> = Vec::new();
-
-                    if post.kind == "photo" {
-                        if let Some(photos) = post.photos {
-                            for photo in photos {
-                                post_files.push(download(
-                                    &client,
-                                    &args,
-                                    "pics",
-                                    photo.original_size.url,
-                                )?);
-                            }
-                        }
-                    } else if post.kind == "video" {
-                        if let Some(url) = post.video_url {
-                            post_files.push(download(&client, &args, "videos", url)?);
-                        }
-                    }
-
-                    files.push(post_files);
-                    bar.inc(1);
-                }
+                files.append(&mut download_posts(res.response.liked_posts, &client, &args, &bar)?);
             }
 
             if let Some(l) = links {
@@ -221,6 +215,37 @@ fn main() -> Result<(), Box<dyn Error>> {
     bar.finish();
 
     Ok(())
+}
+
+fn download_posts(posts: Vec<Post>, client: &reqwest::Client, args: &Arguments, bar: &ProgressBar)
+    -> Result<Vec<Vec<Option<PathBuf>>>, Box<dyn Error>> {
+    let mut files: Vec<Vec<Option<PathBuf>>> = Vec::new();
+
+    for post in posts {
+        let mut post_files: Vec<Option<PathBuf>> = Vec::new();
+
+        if post.kind == "photo" {
+            if let Some(photos) = post.photos {
+                for photo in photos {
+                    post_files.push(download(
+                        client,
+                        args,
+                        "pics",
+                        photo.original_size.url,
+                    )?);
+                }
+            }
+        } else if post.kind == "video" {
+            if let Some(url) = post.video_url {
+                post_files.push(download(&client, &args, "videos", url)?);
+            }
+        }
+
+        files.push(post_files);
+        bar.inc(1);
+    }
+
+    Ok(files)
 }
 
 fn rename(files: Vec<Vec<Option<PathBuf>>>) {
