@@ -85,7 +85,13 @@ fn cli() -> Arguments {
     Arguments {
         api_key: match matches.value_of("API_KEY") {
             Some(a) => a.to_string(),
-            None => if !env_key.is_err() { env_key.unwrap().to_string() } else { "".to_string() },
+            None => {
+                if !env_key.is_err() {
+                    env_key.unwrap().to_string()
+                } else {
+                    "".to_string()
+                }
+            }
         },
 
         blog_name: match matches.value_of("BLOG_NAME") {
@@ -172,7 +178,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         }
 
         loop {
-            let url = build_url(&args, false, before.clone());
+            let url = build_url(&args, false, before);
 
             let mut res: ReturnVal = client.get(&url).send()?.json()?;
             let links = res.response._links;
@@ -181,7 +187,12 @@ fn main() -> Result<(), Box<dyn Error>> {
                 // If dumping or exporting, we need to collect every post
                 all_posts.append(&mut res.response.liked_posts);
             } else {
-                files.append(&mut download_posts(res.response.liked_posts, &client, &args, &bar)?);
+                files.append(&mut download_posts(
+                    res.response.liked_posts,
+                    &client,
+                    &args,
+                    &bar,
+                )?);
             }
 
             if let Some(l) = links {
@@ -217,8 +228,12 @@ fn main() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-fn download_posts(posts: Vec<Post>, client: &reqwest::Client, args: &Arguments, bar: &ProgressBar)
-    -> Result<Vec<Vec<Option<PathBuf>>>, Box<dyn Error>> {
+fn download_posts(
+    posts: Vec<Post>,
+    client: &reqwest::Client,
+    args: &Arguments,
+    bar: &ProgressBar,
+) -> Result<Vec<Vec<Option<PathBuf>>>, Box<dyn Error>> {
     let mut files: Vec<Vec<Option<PathBuf>>> = Vec::new();
 
     for post in posts {
@@ -227,12 +242,7 @@ fn download_posts(posts: Vec<Post>, client: &reqwest::Client, args: &Arguments, 
         if post.kind == "photo" {
             if let Some(photos) = post.photos {
                 for photo in photos {
-                    post_files.push(download(
-                        client,
-                        args,
-                        "pics",
-                        photo.original_size.url,
-                    )?);
+                    post_files.push(download(client, args, "pics", photo.original_size.url)?);
                 }
             }
         } else if post.kind == "video" {
@@ -337,7 +347,13 @@ static CARD_TEMPLATE: &'static str = "<div class='card'>
 </div>
 ";
 
-fn export(client: &reqwest::Client, posts: Vec<Post>, file: String, bar: &ProgressBar, verbose: bool) {
+fn export(
+    client: &reqwest::Client,
+    posts: Vec<Post>,
+    file: String,
+    bar: &ProgressBar,
+    verbose: bool,
+) {
     // Create export directory
     fs::create_dir_all("export").expect("Could not create export directory!");
 
@@ -478,7 +494,11 @@ fn export(client: &reqwest::Client, posts: Vec<Post>, file: String, bar: &Progre
     };
 
     match file.write_all(out.as_bytes()) {
-        Ok(_) => if verbose { println!("Exported liked posts to {}.", display) },
+        Ok(_) => {
+            if verbose {
+                println!("Exported liked posts to {}.", display)
+            }
+        }
         Err(e) => panic!("Couldn't write to {}: {}", display, e),
     }
 }
