@@ -125,7 +125,7 @@ fn main() -> Result<(), Box<dyn Error>> {
             if args.verbose {
                 println!("Downloading posts...");
             }
-            
+
             files = download_posts(posts, &client, &args, &bar)?;
         } else {
             all_posts = posts;
@@ -271,14 +271,14 @@ fn dump(posts: Vec<Post>, file: String) {
 
     let mut file = match File::create(&path) {
         Ok(f) => f,
-        Err(e) => panic!("Couldn't create file {}: {}", display, e.description()),
+        Err(e) => panic!("Couldn't create file {}: {}", display, e),
     };
 
     let json = serde_json::to_string(&posts).unwrap();
 
     match file.write_all(json.as_bytes()) {
         Ok(_) => println!("Dumped liked post data to {}.", display),
-        Err(e) => panic!("Couldn't write to {}: {}", display, e.description()),
+        Err(e) => panic!("Couldn't write to {}: {}", display, e),
     }
 }
 
@@ -474,11 +474,11 @@ fn export(client: &reqwest::Client, posts: Vec<Post>, file: String, bar: &Progre
 
     let mut file = match File::create(&path) {
         Ok(f) => f,
-        Err(e) => panic!("Couldn't create file {}: {}", display, e.description()),
+        Err(e) => panic!("Couldn't create file {}: {}", display, e),
     };
 
     match file.write_all(out.as_bytes()) {
         Ok(_) => if verbose { println!("Exported liked posts to {}.", display) },
-        Err(e) => panic!("Couldn't write to {}: {}", display, e.description()),
+        Err(e) => panic!("Couldn't write to {}: {}", display, e),
     }
 }
