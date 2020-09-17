@@ -63,7 +63,7 @@ pub struct LinksNext {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Links {
-    pub next: LinksNext,
+    pub next: Option<LinksNext>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]

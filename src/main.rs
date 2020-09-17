@@ -196,7 +196,11 @@ fn main() -> Result<(), Box<dyn Error>> {
             }
 
             if let Some(l) = links {
-                before = Some(l.next.query_params.before);
+                before = if let Some(next) = l.next {
+                    Some(next.query_params.before)
+                } else {
+                    break;
+                };
             } else {
                 break;
             }
