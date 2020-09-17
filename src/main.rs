@@ -1,4 +1,4 @@
-use clap::{App, Arg};
+use clap::{crate_version, App, Arg};
 use indicatif::ProgressBar;
 use regex::Regex;
 use std::env;
@@ -28,7 +28,7 @@ fn cli() -> Arguments {
     let env_key = env::var("TUMBLR_API_KEY");
 
     let matches = App::new("tumblr-likes")
-        .version("0.3.3")
+        .version(crate_version!())
         .author("Alex Taylor <alex@alext.xyz>")
         .about("Downloads your liked photos and videos on Tumblr.")
         .arg(
