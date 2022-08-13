@@ -45,7 +45,7 @@ pub fn exists(folder: String, name: String) -> bool {
 
 type DownloadResult = Result<Option<PathBuf>, reqwest::Error>;
 
-pub fn download_url(client: &reqwest::Client, url: String, file: String) -> DownloadResult {
+pub async fn download_url(client: &reqwest::Client, url: String, file: String) -> DownloadResult {
     let path = Path::new(&file);
 
     // Skip existing files
@@ -53,11 +53,11 @@ pub fn download_url(client: &reqwest::Client, url: String, file: String) -> Down
         return Ok(Some(path.to_path_buf()));
     }
 
-    let mut res = client.get(&url).send()?;
+    let res = client.get(&url).send().await?;
 
     if res.status().is_success() {
         let mut f = File::create(path).expect("Could not create file!");
-        std::io::copy(&mut res, &mut f).expect("Could not download file!");
+        std::io::copy(&mut res.bytes().await?.as_ref(), &mut f).expect("Could not download file!");
 
         return Ok(Some(path.to_path_buf()));
     }
@@ -65,7 +65,7 @@ pub fn download_url(client: &reqwest::Client, url: String, file: String) -> Down
     Ok(None)
 }
 
-pub fn download(
+pub async fn download(
     client: &reqwest::Client,
     args: &Arguments,
     folder: &str,
@@ -81,7 +81,7 @@ pub fn download(
         return Ok(None);
     }
 
-    download_url(&client, url.clone(), file)
+    download_url(&client, url.clone(), file).await
 }
 
 pub fn render_trail(trail: Vec<TrailItem>) -> String {

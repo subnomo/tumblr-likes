@@ -33,7 +33,7 @@ fn cli() -> Arguments {
         .about("Downloads your liked photos and videos on Tumblr.")
         .arg(
             Arg::with_name("API_KEY")
-                .short("a")
+                .short('a')
                 .help("Your Tumblr API key")
                 .takes_value(true)
                 .required(env_key.is_err())
@@ -41,7 +41,7 @@ fn cli() -> Arguments {
         )
         .arg(
             Arg::with_name("BLOG_NAME")
-                .short("b")
+                .short('b')
                 .help("The blog to download likes from")
                 .takes_value(true)
                 .required(true)
@@ -49,7 +49,7 @@ fn cli() -> Arguments {
         )
         .arg(
             Arg::with_name("OUTPUT_DIR")
-                .short("d")
+                .short('d')
                 .long("dir")
                 .help("The download directory")
                 .takes_value(true),
@@ -70,13 +70,13 @@ fn cli() -> Arguments {
         .arg(
             Arg::with_name("HTML_FILE")
                 .long("export")
-                .short("e")
+                .short('e')
                 .help("Exports liked posts into the given HTML file")
                 .takes_value(true),
         )
         .arg(
             Arg::with_name("verbose")
-                .short("v")
+                .short('v')
                 .long("verbose")
                 .help("Prints extra information, used for debugging"),
         )
@@ -111,7 +111,8 @@ fn cli() -> Arguments {
     }
 }
 
-fn main() -> Result<(), Box<dyn Error>> {
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn Error>> {
     let args = cli();
     let client = reqwest::Client::new();
     let bar;
@@ -132,7 +133,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                 println!("Downloading posts...");
             }
 
-            files = download_posts(posts, &client, &args, &bar)?;
+            files = download_posts(posts, &client, &args, &bar).await?;
         } else {
             all_posts = posts;
         }
@@ -143,7 +144,7 @@ fn main() -> Result<(), Box<dyn Error>> {
             println!("Info URL: {}", info_url);
         }
 
-        let mut info = client.get(&info_url).send()?;
+        let info = client.get(&info_url).send().await?;
 
         if args.verbose {
             println!("{:#?}", info);
@@ -157,7 +158,7 @@ fn main() -> Result<(), Box<dyn Error>> {
             return Ok(());
         }
 
-        let info: ReturnVal = info.json()?;
+        let info: ReturnVal = info.json().await?;
 
         if args.verbose {
             println!("Info: {:#?}", info);
@@ -180,19 +181,16 @@ fn main() -> Result<(), Box<dyn Error>> {
         loop {
             let url = build_url(&args, false, before);
 
-            let mut res: ReturnVal = client.get(&url).send()?.json()?;
+            let mut res: ReturnVal = client.get(&url).send().await?.json().await?;
             let links = res.response._links;
 
             if !args.dump.is_none() || !args.export.is_none() {
                 // If dumping or exporting, we need to collect every post
                 all_posts.append(&mut res.response.liked_posts);
             } else {
-                files.append(&mut download_posts(
-                    res.response.liked_posts,
-                    &client,
-                    &args,
-                    &bar,
-                )?);
+                files.append(
+                    &mut download_posts(res.response.liked_posts, &client, &args, &bar).await?,
+                );
             }
 
             if let Some(l) = links {
@@ -215,7 +213,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     // Export
     if let Some(export_file) = args.export {
-        export(&client, all_posts, export_file, &bar, args.verbose);
+        export(&client, all_posts, export_file, &bar, args.verbose).await;
         bar.finish();
         return Ok(());
     }
@@ -232,7 +230,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-fn download_posts(
+async fn download_posts(
     posts: Vec<Post>,
     client: &reqwest::Client,
     args: &Arguments,
@@ -246,12 +244,12 @@ fn download_posts(
         if post.kind == "photo" {
             if let Some(photos) = post.photos {
                 for photo in photos {
-                    post_files.push(download(client, args, "pics", photo.original_size.url)?);
+                    post_files.push(download(client, args, "pics", photo.original_size.url).await?);
                 }
             }
         } else if post.kind == "video" {
             if let Some(url) = post.video_url {
-                post_files.push(download(&client, &args, "videos", url)?);
+                post_files.push(download(&client, &args, "videos", url).await?);
             }
         }
 
@@ -351,7 +349,7 @@ static CARD_TEMPLATE: &'static str = "<div class='card'>
 </div>
 ";
 
-fn export(
+async fn export(
     client: &reqwest::Client,
     posts: Vec<Post>,
     file: String,
@@ -398,7 +396,8 @@ fn export(
                     let split: Vec<&str> = url.split("/").collect();
                     let filename = split.last().unwrap();
 
-                    let dl = download_url(&client, url.clone(), format!("export/{}", filename));
+                    let dl =
+                        download_url(&client, url.clone(), format!("export/{}", filename)).await;
 
                     content = content.replace(
                         &url,
@@ -423,7 +422,8 @@ fn export(
                     let split: Vec<&str> = url.split("/").collect();
                     let filename = split.last().unwrap();
 
-                    let dl = download_url(&client, url.clone(), format!("export/{}", filename));
+                    let dl =
+                        download_url(&client, url.clone(), format!("export/{}", filename)).await;
 
                     trail_content = trail_content.replace(
                         "{{content}}",
@@ -458,7 +458,8 @@ fn export(
                         let url = photo.original_size.url;
                         let split: Vec<&str> = url.split("/").collect();
                         let filename = split.last().unwrap();
-                        let dl = download_url(&client, url.clone(), format!("export/{}", filename));
+                        let dl = download_url(&client, url.clone(), format!("export/{}", filename))
+                            .await;
 
                         trail_content = trail_content.replace(
                             "{{content}}",
